@@ -343,43 +343,39 @@ function renderLatexFormula(latex, isBlock = false) {
 }
 
 /**
- * 提取并渲染LaTeX公式
+ * 提取LaTeX公式（先用占位符保护，不渲染）
  */
-function extractAndRenderFormulas(content) {
-  if (!content) return ''
+function extractFormulas(content) {
+  if (!content) return { processed: '', formulas: [] }
 
   let processed = content
-  const formulaPlaceholders = []
+  const formulas = []
 
   // 1. 处理 $$...$$ 块级公式
   processed = processed.replace(/\$\$(.*?)\$\$/gs, (match, latex) => {
-    const placeholder = `%%FORMULA_BLOCK_${formulaPlaceholders.length}%%`
-    const rendered = renderLatexFormula(latex.trim(), true)
-    formulaPlaceholders.push({ placeholder, rendered, isBlock: true })
+    const placeholder = `%%FORMULA_BLOCK_${formulas.length}%%`
+    formulas.push({ placeholder, latex: latex.trim(), isBlock: true })
     return placeholder
   })
 
   // 2. 处理 \[...\] 块级公式
   processed = processed.replace(/\\\[(.*?)\\\]/gs, (match, latex) => {
-    const placeholder = `%%FORMULA_BLOCK_${formulaPlaceholders.length}%%`
-    const rendered = renderLatexFormula(latex.trim(), true)
-    formulaPlaceholders.push({ placeholder, rendered, isBlock: true })
+    const placeholder = `%%FORMULA_BLOCK_${formulas.length}%%`
+    formulas.push({ placeholder, latex: latex.trim(), isBlock: true })
     return placeholder
   })
 
   // 3. 处理 $...$ 行内公式
   processed = processed.replace(/\$(?!\$)([^\$\n]+?)\$(?!\$)/g, (match, latex) => {
-    const placeholder = `%%FORMULA_INLINE_${formulaPlaceholders.length}%%`
-    const rendered = renderLatexFormula(latex.trim(), false)
-    formulaPlaceholders.push({ placeholder, rendered, isBlock: false })
+    const placeholder = `%%FORMULA_INLINE_${formulas.length}%%`
+    formulas.push({ placeholder, latex: latex.trim(), isBlock: false })
     return placeholder
   })
 
   // 4. 处理 \(...\) 行内公式
   processed = processed.replace(/\\\((.*?)\\\)/g, (match, latex) => {
-    const placeholder = `%%FORMULA_INLINE_${formulaPlaceholders.length}%%`
-    const rendered = renderLatexFormula(latex.trim(), false)
-    formulaPlaceholders.push({ placeholder, rendered, isBlock: false })
+    const placeholder = `%%FORMULA_INLINE_${formulas.length}%%`
+    formulas.push({ placeholder, latex: latex.trim(), isBlock: false })
     return placeholder
   })
 
@@ -393,17 +389,26 @@ function extractAndRenderFormulas(content) {
     processed = processed.replace(pattern, unicode)
   }
 
-  // 6. 恢复公式占位符
-  for (const { placeholder, rendered, isBlock } of formulaPlaceholders) {
+  return { processed, formulas }
+}
+
+/**
+ * 恢复公式占位符为渲染后的HTML（在Markdown解析后执行）
+ */
+function restoreFormulas(html, formulas) {
+  let result = html
+
+  for (const { placeholder, latex, isBlock } of formulas) {
+    const rendered = renderLatexFormula(latex, isBlock)
     if (isBlock) {
       // 块级公式使用 katex-display 样式
-      processed = processed.replace(placeholder, `<div class="katex-display">${rendered}</div>`)
+      result = result.replace(placeholder, `<div class="katex-display">${rendered}</div>`)
     } else {
-      processed = processed.replace(placeholder, rendered)
+      result = result.replace(placeholder, rendered)
     }
   }
 
-  return processed
+  return result
 }
 
 /**
@@ -418,15 +423,18 @@ function generatePdfHtml(content, styleConfig) {
   const marginLeft = (styleConfig.marginLeft || 20) / 10
   const marginRight = (styleConfig.marginRight || 20) / 10
 
-  // 提取并渲染LaTeX公式
-  const processedContent = extractAndRenderFormulas(content)
+  // 1. 提取公式（用占位符替换，保护公式不被Markdown解析破坏）
+  const { processed, formulas } = extractFormulas(content)
 
-  // 解析Markdown
+  // 2. 解析Markdown
   marked.setOptions({
     gfm: true,
     breaks: true
   })
-  const htmlContent = marked.parse(processedContent)
+  const htmlContent = marked.parse(processed)
+
+  // 3. 恢复公式占位符为渲染后的HTML
+  const finalHtml = restoreFormulas(htmlContent, formulas)
 
   return `
 <!DOCTYPE html>
@@ -466,8 +474,28 @@ function generatePdfHtml(content, styleConfig) {
 
     p { margin-bottom: 12px; line-height: 1.6; orphans: 3; widows: 3; }
 
-    ul, ol { margin-bottom: 12px; padding-left: 24px; }
-    li { margin-bottom: 4px; }
+    /* 列表样式 - 与预览完全一致 */
+    ul, ol {
+      margin-bottom: 12px;
+      padding-left: 24px;
+      display: block;
+    }
+    ul { list-style-type: disc; }
+    ol { list-style-type: decimal; }
+    li {
+      margin-bottom: 4px;
+      line-height: 1.6;
+      display: list-item;
+    }
+    /* 嵌套列表样式 */
+    ul ul { list-style-type: circle; margin-bottom: 4px; }
+    ul ul ul { list-style-type: square; }
+    ol ol { list-style-type: lower-alpha; margin-bottom: 4px; }
+    ol ol ol { list-style-type: lower-roman; }
+    /* 列表中包含段落时的样式 */
+    li > p { margin-bottom: 4px; }
+    /* 列表项中嵌套列表时减少外层li的底部间距 */
+    li > ul, li > ol { margin-bottom: 0; margin-top: 4px; }
 
     pre { background: #f6f8fa; padding: 16px; border-radius: 6px; overflow-x: auto; font-family: 'Consolas', 'Monaco', monospace; font-size: ${(fontSize * 0.9)}pt; page-break-inside: avoid; }
     code { background: #f6f8fa; padding: 2px 6px; border-radius: 4px; font-family: 'Consolas', 'Monaco', monospace; }
@@ -489,7 +517,7 @@ function generatePdfHtml(content, styleConfig) {
 </head>
 <body>
   ${styleConfig.header ? `<div class="header">${styleConfig.header}</div>` : ''}
-  <div class="content">${htmlContent}</div>
+  <div class="content">${finalHtml}</div>
   ${styleConfig.footer ? `<div class="footer">${styleConfig.footer}</div>` : ''}
 </body>
 </html>`
