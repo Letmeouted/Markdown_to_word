@@ -1,0 +1,12 @@
+{
+  "name": "默认模板",
+  "pageSize": "A4",
+  "marginTop": 25,
+  "marginBottom": 25,
+  "marginLeft": 20,
+  "marginRight": 20,
+  "fontFamily": "SimSun",
+  "fontSize": 12,
+  "header": "",
+  "footer": ""
+}

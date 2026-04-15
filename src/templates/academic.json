@@ -1,0 +1,12 @@
+{
+  "name": "学术论文模板",
+  "pageSize": "A4",
+  "marginTop": 25,
+  "marginBottom": 25,
+  "marginLeft": 30,
+  "marginRight": 30,
+  "fontFamily": "Times New Roman",
+  "fontSize": 12,
+  "header": "",
+  "footer": "- 页码 -"
+}

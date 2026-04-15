@@ -1,0 +1,62 @@
+appId: com.markdown.converter
+productName: Markdown Converter
+
+directories:
+  output: dist_electron
+  buildResources: build
+
+files:
+  - dist/**/*
+  - electron/**/*
+  - package.json
+
+win:
+  target:
+    - target: nsis
+      arch:
+        - x64
+        - ia32
+  icon: build/icon.ico
+  artifactName: ${productName}-${version}-${arch}.${ext}
+
+nsis:
+  oneClick: false
+  allowToChangeInstallationDirectory: true
+  installerIcon: build/icon.ico
+  uninstallerIcon: build/icon.ico
+  installerHeaderIcon: build/icon.ico
+  createDesktopShortcut: true
+  createStartMenuShortcut: true
+  shortcutName: Markdown Converter
+
+mac:
+  target:
+    - target: dmg
+      arch:
+        - x64
+        - arm64
+  icon: build/icon.icns
+  artifactName: ${productName}-${version}-${arch}.${ext}
+  category: public.app-category.productivity
+
+dmg:
+  contents:
+    - x: 130
+      y: 220
+    - x: 410
+      y: 220
+      type: link
+      path: /Applications
+
+linux:
+  target:
+    - AppImage
+    - deb
+  icon: build/icons
+  category: Utility
+  maintainer: your@email.com
+
+publish:
+  provider: github
+  owner: your-username
+  repo: markdown-converter
