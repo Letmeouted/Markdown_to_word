@@ -12,20 +12,20 @@
     "electron:build:mac": "vite build && electron-builder --mac"
   },
   "dependencies": {
-    "vue": "^3.4.21",
-    "element-plus": "^2.6.1",
-    "marked": "^12.0.1",
     "docx": "^8.5.0",
-    "mathjax": "^3.2.2",
+    "element-plus": "^2.6.1",
+    "html-to-text": "^9.0.5",
     "katex": "^0.16.9",
-    "html-to-text": "^9.0.5"
+    "marked": "^12.0.1",
+    "mathjax": "^3.2.2",
+    "vue": "^3.4.21"
   },
   "devDependencies": {
+    "@vitejs/plugin-vue": "^5.0.4",
+    "concurrently": "^8.2.2",
     "electron": "^28.2.0",
     "electron-builder": "^24.9.1",
     "vite": "^5.1.4",
-    "@vitejs/plugin-vue": "^5.0.4",
-    "concurrently": "^8.2.2",
     "wait-on": "^7.2.0"
   },
   "build": {

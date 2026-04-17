@@ -139,6 +139,7 @@ function convertToDocxParagraphs(content, styleConfig) {
   const { processed, blockFormulas, inlineFormulas } = preprocessLatexForDocx(content)
 
   // 使用 marked 解析预处理后的内容
+  marked.setOptions({ gfm: true, breaks: true })
   const tokens = marked.lexer(processed)
 
   // 页眉
@@ -153,32 +154,49 @@ function convertToDocxParagraphs(content, styleConfig) {
         ]
       })
     )
+    // 添加分隔
+    paragraphs.push(new Paragraph({ children: [] }))
   }
 
   for (const token of tokens) {
     switch (token.type) {
       case 'heading':
         paragraphs.push(createHeading(token, blockFormulas, inlineFormulas))
+        // 标题后添加空段落作为分隔
+        paragraphs.push(new Paragraph({ spacing: { after: 120 }, children: [] }))
         break
 
       case 'paragraph':
-        paragraphs.push(...createParagraphFromToken(token, blockFormulas, inlineFormulas))
+        const pParagraphs = createParagraphFromToken(token, blockFormulas, inlineFormulas)
+        paragraphs.push(...pParagraphs)
+        // 段落之间添加适当间距
+        if (pParagraphs.length > 0) {
+          paragraphs.push(new Paragraph({ spacing: { after: 100 }, children: [] }))
+        }
         break
 
       case 'list':
         paragraphs.push(...createNestedList(token, blockFormulas, inlineFormulas))
+        // 列表后添加分隔
+        paragraphs.push(new Paragraph({ spacing: { after: 120 }, children: [] }))
         break
 
       case 'table':
         paragraphs.push(...createTable(token, blockFormulas, inlineFormulas))
+        // 表格后添加分隔
+        paragraphs.push(new Paragraph({ spacing: { after: 120 }, children: [] }))
         break
 
       case 'code':
         paragraphs.push(createCodeBlock(token))
+        // 代码块后添加分隔
+        paragraphs.push(new Paragraph({ spacing: { after: 120 }, children: [] }))
         break
 
       case 'blockquote':
         paragraphs.push(createBlockquote(token, blockFormulas, inlineFormulas))
+        // 引用块后添加分隔
+        paragraphs.push(new Paragraph({ spacing: { after: 120 }, children: [] }))
         break
 
       case 'hr':
@@ -188,12 +206,13 @@ function convertToDocxParagraphs(content, styleConfig) {
         break
 
       case 'space':
-        // 跳过空行
+        // 空行 - 添加空段落作为分隔符
+        paragraphs.push(new Paragraph({ spacing: { after: 60 }, children: [] }))
         break
 
       default:
         if (token.raw) {
-          // 不恢复公式，直接处理占位符
+          // 处理其他类型的token
           const runs = createTextRunsWithNativeFormulas(token.raw, inlineFormulas)
           paragraphs.push(new Paragraph({
             children: runs
@@ -204,6 +223,7 @@ function convertToDocxParagraphs(content, styleConfig) {
 
   // 页脚
   if (styleConfig.footer) {
+    paragraphs.push(new Paragraph({ children: [] }))
     paragraphs.push(
       new Paragraph({
         children: [
@@ -323,6 +343,7 @@ function restoreFormulasInText(text, blockFormulas, inlineFormulas) {
 /**
  * 解析内联样式（加粗、斜体、代码、链接、删除线等）
  * 返回TextRun数组，正确移除Markdown标记符号
+ * 支持换行符处理（将\n转换为Word的break）
  */
 function parseInlineStyles(text) {
   // 确保 text 是字符串
@@ -331,6 +352,9 @@ function parseInlineStyles(text) {
   }
   const runs = []
   let remaining = String(text)
+
+  // 首先处理换行符 - 将文本按换行符分割
+  // 在Word中，换行符需要用特殊方式处理
 
   // 匹配模式顺序很重要，先匹配复杂模式
   const patterns = [
@@ -394,15 +418,14 @@ function parseInlineStyles(text) {
   // 根据匹配结果分割文本
   let pos = 0
   for (const m of validMatches) {
-    // 添加匹配前的普通文本（清理可能的残留标记）
+    // 添加匹配前的普通文本（处理换行符）
     if (m.start > pos) {
       const plainText = remaining.substring(pos, m.start)
-      // 清理任何残留的Markdown标记符号
-      const cleanedText = cleanMarkdownSymbols(plainText)
-      runs.push(new TextRun({ text: cleanedText }))
+      // 处理换行符 - 将文本按\n分割，每个片段后添加break
+      addTextWithLineBreaks(plainText, runs)
     }
 
-    // 添加带样式的文本
+    // 添加带样式的文本（不处理换行符，样式文本通常不含换行）
     if (m.isLink && m.url) {
       // 链接：使用 ExternalHyperlink
       runs.push(new ExternalHyperlink({
@@ -418,20 +441,52 @@ function parseInlineStyles(text) {
     pos = m.end
   }
 
-  // 添加剩余的普通文本（清理残留标记）
+  // 添加剩余的普通文本（处理换行符）
   if (pos < remaining.length) {
     const plainText = remaining.substring(pos)
-    const cleanedText = cleanMarkdownSymbols(plainText)
-    runs.push(new TextRun({ text: cleanedText }))
+    addTextWithLineBreaks(plainText, runs)
   }
 
-  // 如果没有匹配任何样式，返回清理后的原始文本
+  // 如果没有匹配任何样式，返回处理换行后的原始文本
   if (runs.length === 0 && text) {
-    const cleanedText = cleanMarkdownSymbols(text)
-    runs.push(new TextRun({ text: cleanedText }))
+    addTextWithLineBreaks(text, runs)
   }
 
   return runs
+}
+
+/**
+ * 处理文本中的换行符，将\n转换为Word的break
+ * @param {string} text 要处理的文本
+ * @param {Array} runs TextRun数组，会添加新的TextRun元素
+ */
+function addTextWithLineBreaks(text, runs) {
+  if (!text) return
+
+  // 清理残留的Markdown标记符号
+  const cleanedText = cleanMarkdownSymbols(text)
+
+  // 检查是否有换行符
+  if (!cleanedText.includes('\n')) {
+    // 无换行，直接添加文本
+    runs.push(new TextRun({ text: cleanedText }))
+    return
+  }
+
+  // 有换行符，按换行符分割
+  const parts = cleanedText.split('\n')
+
+  for (let i = 0; i < parts.length; i++) {
+    const part = parts[i]
+    if (part) {
+      runs.push(new TextRun({ text: part }))
+    }
+    // 在每个换行后添加break（除了最后一个）
+    if (i < parts.length - 1) {
+      // 使用带break的空TextRun来创建换行
+      runs.push(new TextRun({ text: '', break: 1 }))
+    }
+  }
 }
 
 /**
@@ -495,7 +550,7 @@ function createHeading(token, blockFormulas, inlineFormulas) {
 /**
  * 创建普通段落（从token处理）
  * 使用 token.raw 保留原始 markdown 格式（包括加粗、斜体等）
- * 支持Word原生公式
+ * 支持Word原生公式，并正确处理段落换行
  */
 function createParagraphFromToken(token, blockFormulas, inlineFormulas) {
   const paragraphs = []
@@ -504,9 +559,6 @@ function createParagraphFromToken(token, blockFormulas, inlineFormulas) {
   let rawText = token.raw || ''
   rawText = rawText.trim()
 
-  // 不调用 restoreFormulasInText，保持占位符完整
-  // 这样可以正确检测块级公式并创建Word原生公式
-
   // 检查是否包含块级公式占位符
   const blockPattern = /%%BLOCK_FORMULA_(\d+)%%/g
   let match
@@ -514,7 +566,7 @@ function createParagraphFromToken(token, blockFormulas, inlineFormulas) {
   let currentRuns = []
 
   while ((match = blockPattern.exec(rawText)) !== null) {
-    // 添加公式前的文本（解析内联样式和公式）
+    // 添加公式前的文本
     if (match.index > lastIndex) {
       const beforeText = rawText.substring(lastIndex, match.index)
       const beforeRuns = createTextRunsWithNativeFormulas(beforeText, inlineFormulas)
@@ -954,36 +1006,58 @@ function formatLatexForDisplay(latex) {
 }
 
 /**
- * 创建列表段落（处理嵌套层级）
- * marked 库的 list token 中，每个 item 都有 depth 属性表示层级
+ * 创建列表段落（支持嵌套列表和列表项中的复杂内容）
+ * marked 库的 list token 中，每个 item 可能包含嵌套的子列表
  */
 function createNestedList(token, blockFormulas, inlineFormulas) {
   const paragraphs = []
 
   for (const item of token.items) {
-    // 获取当前项的层级深度（marked库使用depth属性）
+    // 获取当前项的层级深度
     const level = item.depth || 0
 
-    // 获取文本内容
-    let rawText = item.text || item.raw || ''
-    rawText = rawText.trim()
+    // 使用 item.text 作为列表项的主要内容（marked已经正确提取）
+    // 这样可以避免从 raw 中提取时重复处理嵌套内容
+    let itemText = item.text || ''
 
-    // 去掉列表标记（如 - 、 * 、 1. 等）
-    rawText = rawText.replace(/^[-*+]\s*/, '').replace(/^\d+\.\s*/, '')
+    // 检查是否有嵌套子列表（通过 item.tokens 检查）
+    const nestedListTokens = item.tokens ? item.tokens.filter(t => t.type === 'list') : []
 
-    // 不调用 restoreFormulasInText，直接处理占位符
-    // 这样可以正确创建Word原生公式
-    const runs = createTextRunsWithNativeFormulas(rawText, inlineFormulas)
+    if (nestedListTokens.length > 0) {
+      // 有嵌套子列表的情况
+      // item.text 已经包含了列表项的主要内容（不包含子列表）
+      if (itemText.trim()) {
+        const runs = createTextRunsWithNativeFormulas(itemText.trim(), inlineFormulas)
+        paragraphs.push(
+          new Paragraph({
+            children: runs,
+            bullet: {
+              level: Math.min(level, 8),
+              format: token.ordered ? LevelFormat.DECIMAL : LevelFormat.BULLET
+            }
+          })
+        )
+      }
 
-    paragraphs.push(
-      new Paragraph({
-        children: runs,
-        bullet: {
-          level: Math.min(level, 8), // Word最多支持8级嵌套
-          format: token.ordered ? LevelFormat.DECIMAL : LevelFormat.BULLET
-        }
-      })
-    )
+      // 处理嵌套子列表（递归调用）
+      for (const subToken of nestedListTokens) {
+        paragraphs.push(...createNestedList(subToken, blockFormulas, inlineFormulas))
+      }
+    } else {
+      // 简单列表项（无嵌套）
+      if (itemText.trim()) {
+        const runs = createTextRunsWithNativeFormulas(itemText.trim(), inlineFormulas)
+        paragraphs.push(
+          new Paragraph({
+            children: runs,
+            bullet: {
+              level: Math.min(level, 8),
+              format: token.ordered ? LevelFormat.DECIMAL : LevelFormat.BULLET
+            }
+          })
+        )
+      }
+    }
   }
 
   return paragraphs
@@ -1645,6 +1719,10 @@ const LATEX_SYMBOLS = {
   'land': '∧', 'lor': '∨', 'rightarrow': '→', 'leftarrow': '←',
   'Rightarrow': '⇒', 'Leftarrow': '⇐', 'leftrightarrow': '↔',
   'Leftrightarrow': '⇔',
+
+  // 数学运算符
+  'sum': '∑', 'int': '∫', 'prod': '∏', 'lim': 'lim',
+  'iint': '∬', 'iiint': '∭', 'oint': '∮',
 
   // 其他符号
   'infty': '∞', 'partial': '∂', 'nabla': '∇',
