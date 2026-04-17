@@ -2,6 +2,8 @@
 
 一个功能强大的 Markdown 转 Word/PDF 桌面应用程序，支持 LaTeX 数学公式的完美渲染。
 
+📄 [英文版本](README_EN.md)
+
 ## 功能特点
 
 - **Markdown 转 Word (.docx)**：将 Markdown 文档转换为专业的 Word 文档，LaTeX 公式以可编辑的公式对象形式呈现
@@ -185,4 +187,6 @@ MIT License
 
 ## 作者
 
-Markdown Converter Team :huafeng,wang 
+Markdown转换工具团队: Wang Huafeng
+
+图标资源提供者: Yan Lijuan
