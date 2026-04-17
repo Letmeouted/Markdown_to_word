@@ -171,7 +171,9 @@ npm install
 
 ## 开发计划
 
+- [ ] 支持登录注册
 - [ ] 支持更多 LaTeX 命令
+- [ ] 支持导出html文件
 - [ ] 图片支持
 - [ ] 批量转换
 - [ ] 深色模式
@@ -183,4 +185,4 @@ MIT License
 
 ## 作者
 
-Markdown Converter Team
+Markdown Converter Team :huafeng,wang 
