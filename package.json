@@ -1,6 +1,6 @@
 {
   "name": "markdown-converter",
-  "version": "1.0.0",
+  "version": "0.0.1",
   "description": "Markdown to Word/PDF Converter with LaTeX formula support",
   "main": "electron/main.js",
   "scripts": {
@@ -36,7 +36,8 @@
     },
     "files": [
       "dist/**/*",
-      "electron/**/*"
+      "electron/**/*",
+      "build/icon.ico"  
     ],
     "win": {
       "target": "nsis",
