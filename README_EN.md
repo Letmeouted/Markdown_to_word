@@ -175,7 +175,7 @@ npm install
 
 - [ ] Support user login/registration
 - [ ] Support more LaTeX commands
-- [ ] Support HTML export
+- [x] Support HTML export
 - [ ] Image support
 - [ ] Batch conversion
 - [ ] Dark mode
