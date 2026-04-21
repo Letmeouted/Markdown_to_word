@@ -52,6 +52,10 @@
             <el-icon><Tickets /></el-icon>
             导出 PDF
           </el-button>
+          <el-button type="info" @click="exportToHtml" :disabled="!markdownContent">
+            <el-icon><Document /></el-icon>
+            导出 HTML
+          </el-button>
           <el-button @click="showStyleConfig = true" :disabled="!markdownContent">
             <el-icon><Setting /></el-icon>
             样式设置
@@ -136,6 +140,7 @@ import { parseMarkdown } from './utils/markdownParser'
 import 'katex/dist/katex.min.css'
 import { generateDocx } from './utils/docxGenerator'
 import { generatePdf } from './utils/pdfGenerator'
+import { generateHtml } from './utils/htmlGenerator'
 
 // 状态
 const fileName = ref('')
@@ -237,6 +242,38 @@ async function exportToPdf() {
       exportProgress.value = 100
       exportStatus.value = 'success'
       ElMessage.success(`PDF已保存: ${filePath}`)
+    }
+  } catch (error) {
+    exportStatus.value = 'exception'
+    ElMessage.error('导出失败: ' + error.message)
+    console.error(error)
+  } finally {
+    setTimeout(() => {
+      showExportProgress.value = false
+    }, 1000)
+  }
+}
+
+// 导出HTML
+async function exportToHtml() {
+  showExportProgress.value = true
+  exportProgress.value = 0
+  exportStatus.value = ''
+
+  try {
+    exportProgress.value = 50
+    const htmlBlob = await generateHtml(markdownContent.value, styleConfig.value)
+    exportProgress.value = 80
+
+    const defaultName = fileName.value.replace(/\.(md|markdown|txt)$/, '.html') || 'document.html'
+
+    const filePath = await window.electronAPI.saveFile(defaultName, null)
+    if (filePath) {
+      const buffer = await htmlBlob.arrayBuffer()
+      await window.electronAPI.saveBuffer(filePath, Array.from(new Uint8Array(buffer)))
+      exportProgress.value = 100
+      exportStatus.value = 'success'
+      ElMessage.success(`HTML已保存: ${filePath}`)
     }
   } catch (error) {
     exportStatus.value = 'exception'
